@@ -3,7 +3,7 @@ This repository contains the source code for M1 Online, released on Android and 
 by [Gabriele Dragotto](http://dragotto.net). The source include content of [Phonegap](https://phonegap.com/about/license/), released under the Apache license.
 
 
-# MIT License
+## MIT License
 
 Copyright (c) 2014-2020 Gabriele Dragotto
 
