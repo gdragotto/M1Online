@@ -2,6 +2,9 @@
 This repository contains the source code for M1 Online, released on Android and iOS in 2014
 by [Gabriele Dragotto](http://dragotto.net). The source include content of [Phonegap](https://phonegap.com/about/license/), released under the Apache license.
 
+Video 1: [Youtube](https://www.youtube.com/watch?v=JGQWrqxbZLs)
+Video 2: [Youtube](https://www.youtube.com/watch?v=w8Q09fGTwpE)
+
 
 ## MIT License
 
