@@ -1,0 +1,59 @@
+{
+    "org.apache.cordova.device": {
+        "source": {
+            "type": "registry",
+            "id": "org.apache.cordova.device"
+        },
+        "is_top_level": true,
+        "variables": {}
+    },
+    "cordova-plugin-3dtouch": {
+        "source": {
+            "type": "registry",
+            "id": "cordova-plugin-3dtouch"
+        },
+        "is_top_level": true,
+        "variables": {}
+    },
+    "com-sarriaroman-photoviewer": {
+        "source": {
+            "type": "registry",
+            "id": "com-sarriaroman-photoviewer"
+        },
+        "is_top_level": true,
+        "variables": {}
+    },
+    "cordova-plugin-shake": {
+        "source": {
+            "type": "git",
+            "url": "https://github.com/leecrossley/cordova-plugin-shake.git",
+            "subdir": "."
+        },
+        "is_top_level": true,
+        "variables": {}
+    },
+    "cordova-plugin-device-motion": {
+        "source": {
+            "type": "registry",
+            "id": "cordova-plugin-device-motion"
+        },
+        "is_top_level": false,
+        "variables": {}
+    },
+    "org.apache.cordova.dialogs": {
+        "source": {
+            "type": "registry",
+            "id": "org.apache.cordova.dialogs"
+        },
+        "is_top_level": true,
+        "variables": {}
+    },
+    "org.apache.cordova.vibration": {
+        "source": {
+            "type": "registry",
+            "id": "org.apache.cordova.vibration"
+        },
+        "is_top_level": true,
+        "variables": {}
+    }
+}

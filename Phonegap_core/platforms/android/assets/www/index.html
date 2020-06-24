@@ -1,0 +1,1716 @@
+<!doctype html>
+<html lang="en" ng-app="app">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>M1 ONLINE</title>
+
+    <link rel="stylesheet" href="lib/onsen/css/onsenui.css">
+    <link rel="stylesheet" href="styles/onsen-css-components.css">
+    <link rel="stylesheet" href="res/proxima/fonts.css" />
+
+    <script src="lib/onsen/js/angular/angular.js"></script>
+    <script src="lib/jquery.min.js"></script>
+    <!-- iOS Only -->
+    <script src="lib/3dtouch.js"></script>
+    <script src="lib/onsen/js/onsenui.js"></script>
+    <script src="lib/backstretch.js"></script>
+    <script src="lib/jquery.color.js"></script>
+
+    <script src="cordova.js"></script>
+
+    <script>
+        var M1_address = 'http://m1.majo.us/wp-json/';
+        var M1_address_v2 = 'http://m1.majo.us/M1.interact.php';
+        var module = angular.module('app', ['onsen']);
+        var Module = module;
+        var M1_editions = new Array();
+        var M1_edition = null;
+        var M1_edition_name = null;
+        var M1_tags = new Array();
+        var M1_tag = null;
+        var M1_tag_slug = null;
+        var M1_tag_count = 0;
+        var M1_edition_count = 0;
+        var M1_tag_name = null;
+        var M1_author = null;
+        var M1_author_name = null;
+        var M1_author_image = null;
+        var M1_author_bio = null;
+        var M1_nonetwork = false;
+        var M1_likecount = null;
+        var M1_article_id = null;
+        var ZERO_pc = 0;
+        var M1_DevID = window.localStorage.getItem("M1_DevID");
+        var M1_DevSecret = window.localStorage.getItem("M1_DevSecret");
+        $(document).ready(function () {
+            Editions_fetchEditions(M1_editions);
+            window.setTimeout(Tags_fetchTags(M1_tags), 3000);
+            window.setInterval(Network_background_check, 1000);
+            document.addEventListener('deviceready', DeviceReady, false);
+
+        });
+
+        function DeviceReady() {
+            //iOS ONLY
+            ThreeDeeTouch_init();
+            //iOS ONLY
+            var M1_DevID = window.localStorage.getItem("M1_DevID");
+            var M1_DevSecret = window.localStorage.getItem("M1_DevSecret");
+            API_CheckKeys();
+        }
+
+
+        // ----------------------------------------------------------------------------//
+        // ------------------------------- BASIC FUNCT. ------------------------------ //
+        // ----------------------------------------------------------------------------//
+
+        function validateEmail(email) {
+            var re = /^([\w-]+(?:\.[\w-]+)*)@((?:[\w-]+\.)*\w[\w-]{0,66})\.([a-z]{2,6}(?:\.[a-z]{2})?)$/i;
+            return re.test(email);
+        }
+
+        function getMonthString(index) {
+            var strings = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
+            return (strings[index]);
+        }
+
+        function CapitalizeEvery(string) {
+            return string.replace(/\w\S*/g, function (txt) {
+                return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
+            });
+        }
+
+        function CapitalizeFirst(string) {
+            return string.charAt(0).toUpperCase() + string.slice(1);
+        }
+
+        function emptyCallback() {
+
+        }
+
+        function Network_background_check() {
+            if (navigator.connection) {
+                if (navigator.connection.type == Connection.NONE) {
+                    modal.show();
+                    M1_nonetwork = true;
+                } else {
+                    if (M1_nonetwork) {
+                        modal.hide();
+                        M1_nonetwork = false;
+                    }
+                }
+            }
+        }
+
+        // ----------------------------------------------------------------------------//
+        // ------------------------------- API SECTION ------------------------------- //
+        // ----------------------------------------------------------------------------//
+        function API_CheckKeys() {
+            if (window.M1_DevID && window.M1_DevSecret) {
+                if (window.M1_DevID.length > 15 && window.M1_DevSecret.length > 15) {
+                    $.getJSON(M1_address_v2 + "?a=validate&devid=" + window.M1_DevID + "&devsecret=" + window.M1_DevSecret + "&random=" +
+                        Math.random(),
+                        function (data) {
+                            if (data != true) {
+                                window.localStorage.clear();
+                                navigator.notification.alert('La tua sessione è scaduta.Per riattivarla effettua il login.', emptyCallback, 'M1', 'OK');
+                                $('#LoginForm').fadeIn('fast').css('display', 'block');
+                                $('#LoginProfile').fadeOut().css('display', 'none');
+                            } else {
+                                API_FetchLiked();
+                                API_FetchData();
+                                $('#LoginForm').fadeOut('fast').css('display', 'none');
+                                $('#LoginProfile').fadeIn().css('display', 'block');
+                            }
+                        });
+                } else {
+                    $('#LoginForm').fadeIn('fast').css('display', 'block');
+                    $('#LoginProfile').fadeOut().css('display', 'none');
+                }
+            } else {
+                $('#LoginForm').fadeIn().css('display', 'block');
+                $('#LoginProfile').fadeOut().css('display', 'none');
+            }
+        }
+
+        function API_FetchData() {
+            if (window.M1_DevID && window.M1_DevSecret) {
+                if (window.M1_DevID.length > 15 && window.M1_DevSecret.length > 15) {
+                    $.getJSON(M1_address_v2 + "?a=userdata&devid=" + window.M1_DevID + "&devsecret=" + window.M1_DevSecret + "&random=" +
+                        Math.random(),
+                        function (data) {
+                            if (!data.hasOwnProperty('first_name')) {
+                                navigator.notification.alert('La tua sessione è scaduta.Per riattivarla effettua il login.', emptyCallback, 'M1', 'OK');
+                                window.localStorage.clear();
+                            } else {
+                                window.localStorage.setItem("M1Profile_firstname", data.first_name);
+                                window.localStorage.setItem("M1Profile_lastname", data.last_name);
+                                window.localStorage.setItem("M1Profile_email", data.email);
+                                window.localStorage.setItem("M1Profile_id", data.id);
+                                window.localStorage.setItem("M1Profile_avatar", data.avatar);
+                                $('#PProfile_image').attr('src', data.avatar);
+                                $('#PProfile_name').html(data.first_name + " " + data.last_name);
+                                $('#PProfile_email').html(data.email);
+                                $('#PProfile_username').html(window.localStorage.getItem("M1_Username"));
+                            }
+                        });
+
+                }
+            }
+        }
+
+        function API_FetchLiked() {
+            if (window.M1_DevID && window.M1_DevSecret) {
+                if (window.M1_DevID.length > 15 && window.M1_DevSecret.length > 15) {
+                    $.getJSON(M1_address_v2 + "?a=liked&devid=" + window.M1_DevID + "&devsecret=" + window.M1_DevSecret + "&random=" +
+                        Math.random(),
+                        function (data) {
+                            if (data.hasOwnProperty('result')) {
+                                var res = Array();
+                                for (var key in data) {
+                                    if (data[key] != 'yuppie')
+                                        res.push(data[key]);
+                                }
+                                window.localStorage.setItem("M1Profile_liked", res);
+                            } else {
+                                window.localStorage.setItem("M1Profile_liked", Array());
+
+                            }
+                        });
+
+                }
+            }
+        }
+
+
+        function API_Logout() {
+            if (window.M1_DevID && window.M1_DevSecret) {
+                if (window.M1_DevID.length > 15 && window.M1_DevSecret.length > 15) {
+                    $.getJSON(M1_address_v2 + "?a=logout&devid=" + window.M1_DevID + "&devsecret=" + window.M1_DevSecret + "&random=" +
+                        Math.random(),
+                        function (data) {
+                            window.localStorage.clear();
+                            window.M1_DevID = null;
+                            window.M1_DevSecret = null;
+                            API_CheckKeys();
+                            navigator.notification.alert('Hai effettuato il logout.', emptyCallback, 'M1', 'OK');
+
+                        });
+
+                }
+            }
+        }
+
+
+
+        function API_Login(username, password) {
+            if (username && password) {
+                if (username.length > 2 && password.length > 2) {
+                    $.getJSON(M1_address_v2 + "?a=login&username=" + username + "&password=" + password + "&random=" +
+                        Math.random(),
+                        function (data) {
+                            if (!data.hasOwnProperty('devid')) {
+                                navigator.notification.alert('I dati sembrano incorretti.', emptyCallback, 'M1', 'OK');
+                            } else {
+                                API_FetchLiked();
+                                window.localStorage.setItem("M1_Login", true);
+                                window.localStorage.setItem("M1_DevID", data.devid);
+                                window.localStorage.setItem("M1_DevSecret", data.devsecret);
+                                window.localStorage.setItem("M1_Username", data.username);
+                                window.M1_DevID = data.devid;
+                                window.M1_DevSecret = data.devsecret;
+                                $('#LoginForm').fadeOut('fast');
+                                $('#LoginProfile').fadeIn();
+                                API_FetchData();
+
+                            }
+                        });
+                } else {
+                    navigator.notification.alert('Username e password sono troppo corti.', emptyCallback, 'M1', 'OK');
+                }
+            } else {
+                navigator.notification.alert('Username e password sono incompleti.', emptyCallback, 'M1', 'OK');
+            }
+        }
+
+
+        // ----------------------------------------------------------------------------//
+        // ------------------------------- DASHBOARD   ------------------------------- //
+        // ----------------------------------------------------------------------------//
+        Module.controller('DashboardController', ['$scope', '$http', '$q', function ($scope, $http, $q) {
+            $scope.items = new Array;
+            menu.setSwipeable(false);
+            Dashboard();
+            $scope.Infinitescroll = {
+                configureItemScope: function (index, itemScope) {
+                    if (!itemScope.item) {
+                        itemScope.canceler = $q.defer();
+                        itemScope.item = {
+                            title: 'Caricamento...'
+                        };
+                        $http.get(M1_address + "posts?filter[post_status]=publish&filter[posts_per_page]=1&page=" + (index + 5) + "&filter[orderby]=date&filter[order]=desc&rand=" + Math.random(), {
+                                timeout: itemScope.canceler.promise
+                            })
+                            .success(function (d) {
+                                if (d[0].status == 'publish') {
+                                    if (d[0].featured_image) {
+                                        if (d[0].featured_image.attachment_meta.sizes.hasOwnProperty('thumbnail'))
+                                            imagez = d[0].featured_image.attachment_meta.sizes.thumbnail.url;
+                                        else imagez = "res/logo.png";
+                                    }
+
+                                    itemScope.item.id = d[0].ID;
+                                    itemScope.item.title = $('<textarea />').html(d[0].title).text();
+                                    itemScope.item.author = $('<textarea />').html(CapitalizeEvery(d[0].author.name)).text();
+                                    itemScope.item.image = imagez + '?rand=' + Math.random();
+                                    itemScope.item.class = 'Dash_cont';
+                                }
+
+                            })
+
+
+                        .error(function () {
+                            itemScope.item.title = 'Impossibile caricare';
+                        });
+
+                    }
+                },
+                destroyItemScope: function (index, itemScope) {
+                    itemScope.canceler.resolve();
+                },
+                calculateItemHeight: function (index) {
+                    return 110;
+                },
+                countItems: function () {
+                    return 15;
+                }
+            }
+
+                            }]);
+
+        function Dashboard() {
+            $('#Dashpage_content').before("<div class='spinner' style='z-index:1;' id='dashloader'></div>");
+            $.getJSON(M1_address + "posts?filter[post_status]=publish&filter[posts_per_page]=4&page=1&filter[orderby]=date&filter[order]=desc&rand=" + Math.random(), function (data) {
+                $('#header_post').empty();
+                $('#dashloader').fadeOut().remove();
+                $.each(data, function (idx, d) {
+                    if (d.status == 'publish') {
+                        $('#header_post').append('<a href="#" onclick="Navigator.pushPage(\'article.html\', { animation : \'slide\', id: ' + d.ID + ' })" ><div class="module Dash_cont" id="head_img_' + d.ID + '"><div id="dash_header_overlay"></div><header><h1>' + d.title + '</h1><pr>' + (CapitalizeEvery(d.author.name)) + '</pr><br></header></div></a>');
+                        if (d.featured_image) {
+                            if (d.featured_image.attachment_meta.sizes.hasOwnProperty('large'))
+                                $('#head_img_' + d.ID).backstretch(d.featured_image.attachment_meta.sizes.large.url);
+                            else
+                                $('#head_img_' + d.ID).backstretch(d.featured_image.attachment_meta.sizes.medium.url);
+                        }
+                    }
+                });
+                if (jQuery.isEmptyObject(data)) {
+                    $('#header_post').append('<div class="module Dash_cont" id="edizione_head_img_nf" style="position: absolute;height:101%"><div id="dash_header_overlay"></div><header><h1>Oops! Sembra non esserci nulla qua!</h1><pr>404 MESSAGE</pr><br></header></div>');
+                    $('#edizione_head_img_nf').backstretch('res/poly.jpg');
+                }
+            });
+            $('#header_post').fadeIn();
+
+        }
+
+
+
+        // ----------------------------------------------------------------------------//
+        // ------------------------------- ABOUT       ------------------------------- //
+        // ----------------------------------------------------------------------------//
+        Module.controller('AboutController', function ($scope, $timeout) {
+            /*$('#zerocredits').css('top', $("#zerovideo").height() * 1.1);
+            window.ZERO_pc = 0;*/
+            getAppVersion(function () {
+                $('#ver').html('M1 App Version: ' + version);
+            });
+
+            window.setTimeout(function () {
+                $('#zeroimg').css('height', $('#zeroimg').width() * 0.5625);
+                $('#zerocredits').css('top', $('#zeroimg').width() * 0.6);
+                $('#zeroimg').backstretch('res/zero.gif');
+                $("#zeroimg").fadeIn("slow", function () {
+                    $('#zerocredits').fadeIn();
+                })
+            }, 500);
+
+        });
+
+        /*function VideoEnd() {
+            if (window.ZERO_pc == 0) {
+                $('#zerocredits').fadeIn('slow');
+                window.ZERO_pc = 1;
+            }
+            $("#zerovideo").prop('muted', true);
+            var b = document.getElementById("zerovideo");
+            b.play();
+
+        }*/
+
+        // ----------------------------------------------------------------------------//
+        // ------------------------------- ACCOUNT     ------------------------------- //
+        // ----------------------------------------------------------------------------//
+        Module.controller('AccountController', function ($scope, $timeout) {
+            console.log('called');
+            window.setTimeout(API_CheckKeys, 100);
+            Star();
+        });
+
+        function Star() {
+                $('#star_post').empty();
+                var liked = window.localStorage.getItem("M1Profile_liked");
+                if (window.localStorage.getItem("M1Profile_liked") === null) var results = Array('');
+                else var results = liked.split(',');
+                if (typeof results !== 'undefined' && results.length > 0) {
+                    $.each(results, function (idx, p) {
+                        $.getJSON(M1_address + "posts/" + p + "?filter[post_status]=publish&rand=" + Math.random(), function (d) {
+                            if (d.status == 'publish') {
+                                $('#star_post').append('<a href="#" onclick="Navigator.pushPage(\'article.html\', { animation : \'slide\', id: ' + d.ID + ' })" ><div class="module Dash_cont" id="head_img_' + d.ID + '"><div id="dash_header_overlay"></div><header><h1>' + d.title + '</h1><pr>' + (CapitalizeEvery(d.author.name)) + '</pr><br></header></div></a>');
+                                if (d.featured_image) {
+                                    if (d.featured_image.attachment_meta.sizes.hasOwnProperty('large'))
+                                        $('#head_img_' + d.ID).backstretch(d.featured_image.attachment_meta.sizes.large.url);
+                                    else
+                                        $('#head_img_' + d.ID).backstretch(d.featured_image.attachment_meta.sizes.medium.url);
+                                }
+                            }
+                        });
+                    });
+                }
+                if (jQuery.isEmptyObject(results)) {
+                    $('#star_post').append('<div class="module Dash_cont" id="edizione_head_img_nf" style="height:400px"><div id="dash_header_overlay"></div><header><h1>Oops! Sembra non esserci nulla qua!</h1><pr>You don\'t have any favourite articles, yet.</pr><br></header></div>');
+                    $('#edizione_head_img_nf').backstretch('res/poly.jpg');
+                }
+                $('#star_post').fadeIn();
+            }
+            // ----------------------------------------------------------------------------//
+            // ------------------------------- COMMENT      ------------------------------- //
+            // ----------------------------------------------------------------------------//
+        Module.controller('CommentController', function ($scope, $timeout) {
+            $scope.Comment = function () {
+                var commento = $('#CommentBody').val();
+                if (commento.length > 2) {
+                    if (window.M1_DevID.length > 15 && window.M1_DevSecret.length > 15) {
+                        if (commento.length > 2) {
+                            $.getJSON(M1_address_v2 + "?a=comment&comment=" + commento + "&id=" + M1_article_id + "&devid=" + window.M1_DevID + "&devsecret=" + window.M1_DevSecret + "&random=" + Math.random(),
+                                function (data) {
+                                    if (data === false) {
+                                        navigator.notification.alert('Si è verificato un\' errore.', emptyCallback, 'M1', 'OK');
+                                    } else {
+                                        var pages = Navigator.getPages(),
+                                            index = pages.length - 2;
+
+                                        if (index < 0)
+                                            return;
+
+                                        Navigator.insertPage(index, 'article.html', {
+                                            id: M1_article_id
+                                        });
+                                        pages.splice(index, 1);
+                                        Navigator.popPage();
+                                        navigator.notification.alert('Il tuo commento è stato inserito.', emptyCallback, 'M1', 'OK');
+                                    }
+                                });
+                        } else navigator.notification.alert('Qualcosa nel tuo commento sembra errato.', emptyCallback, 'M1', 'OK');
+
+                    } else navigator.notification.alert('Devi effettuare il login nella sezione account per commentare.', emptyCallback, 'M1', 'OK');
+                } else navigator.notification.alert('Il commento è troppo corto.', emptyCallback, 'M1', 'OK');
+            }
+        });
+
+
+        // ----------------------------------------------------------------------------//
+        // ------------------------------- ARTICLE     ------------------------------- //
+        // ----------------------------------------------------------------------------//
+        Module.controller('ArticleController', function ($scope, $timeout) {
+            $scope.comments = new Array();
+            $scope.isLoading = false;
+            $scope.apply;
+            $scope.Comments = function () {
+                if (Navigator.getCurrentPage().options.id) {
+                    window.M1_article_id = Navigator.getCurrentPage().options.id;
+                    artid = Navigator.getCurrentPage().options.id;
+                } else artid = window.M1_article_id;
+                $.getJSON(M1_address + "posts/" + artid + "/comments/?rand=" + Math.random(), function (data) {
+                    if (typeof data[0] !== 'undefined') {
+                        $('#Comments_num').html(data.length);
+                        $.each(data, function (idx, d) {
+                            if (d.author.hasOwnProperty('username')) {
+                                username = "@" + d.author.username;
+                            } else {
+                                username = '';
+                            }
+                            var dataz = new Date(d.date_gmt);
+                            var regex = /(<([^>]+)>)/ig,
+                                content2 = d.content.replace(regex, "");
+                            $scope.comments.push({
+                                id: d.ID,
+                                name: $('<textarea />').html(d.author.name).text(),
+                                username: $('<textarea />').html(username).text(),
+                                avatar: d.author.avatar,
+                                data: dataz.getDate() + " " + getMonthString(dataz.getMonth()) + " " + dataz.getFullYear() + " alle " + dataz.getHours() + ":" + dataz.getMinutes(),
+                                content: $("<div/>").html(content2).text()
+                            });
+                        });
+                        $scope.$apply();
+                    }
+                });
+            }
+            $scope.Article = function () {
+                if (Navigator.getCurrentPage().options.id) {
+
+                    window.M1_article_id = Navigator.getCurrentPage().options.id;
+                    var artid = Navigator.getCurrentPage().options.id;
+                } else var artid = window.M1_article_id;
+                nh = $('.Article_image').height() + 50;
+                $('.Article_image').css('height', nh + 'px');
+                var page = Navigator.getCurrentPage();
+                $.getJSON(M1_address + "posts/" + artid + "?filter[post_status]=publish&rand=" + Math.random(), function (data) {
+                    if (data.status == 'publish') {
+
+                        $('.Article_title').html(data.title);
+                        $('#Article_title_top').html(data.title);
+                        $('.Article_author').html((CapitalizeEvery(data.author.name)));
+                        $('.Article_content').empty();
+                        $('.Article_content').html(data.content);
+                        var spot_link = null;
+                        jQuery(".Article_content a").each(function () {
+                            if (!$(this).find("img").attr('src'))
+                                $(this).attr('onclick', 'Broswer(\'' + $(this).attr('href') + '\')').attr('href', '#').removeAttr('target', '');
+                        });
+                        jQuery(".Article_content img").each(function () {
+                            $(this).before("<a href='#' onclick=\"PhotoViewer.show('" + $(this).attr('src') + "', 'M1 ')\"> <img class='articlemedia_img' src='" + $(this).attr('src') + "' class='" + $(this).attr('class') + "' width='" + $(this).attr('width') + "' height='auto'></a>");
+                            $(this).remove();
+                        });
+                        jQuery(".Article_content iframe").each(function () {
+                            if ($(this).attr('src').indexOf("spotify") != -1) {
+                                $(".Article_content").prepend("<center><a onclick='Spotify(\"" + $(this).attr('src') + "\")'><i class='fa fa-spotify' style='font-size: 50px;color: #F32A38;'></i></a></center><br>");
+                                $(this).remove();
+                            } else if ($(this).attr('src').indexOf("youtube") != -1) {
+                                $(".Article_content").prepend("<center><a onclick='Youtube(\"" + $(this).attr('src') + "\")'><i class='fa fa-youtube' style='font-size: 50px;color: #F32A38;'></i></a></center><br>");
+                                $(this).remove();
+                            }
+
+                        });
+
+                        $('.Article_content').find('.page').removeClass('page');
+                        $('.Article_author_picture').attr('src', data.author.avatar)
+                        $('.Article_author_bio').html(CapitalizeFirst(data.author.description).split(' ').slice(0, 4).join(' ') + "...");
+                        $('#Article_cont').hide();
+                        M1_author = data.author.ID;
+                        M1_author_name = CapitalizeEvery(data.author.name);
+                        M1_author_image = data.author.avatar;
+                        M1_author_bio = CapitalizeFirst(data.author.description);
+                        var image;
+                        $(".size-full").click(function (e) {
+                            e.preventDefault();
+                        });
+                        if (data.featured_image) {
+                            if (data.featured_image.attachment_meta.sizes.hasOwnProperty('large'))
+                                image = data.featured_image.attachment_meta.sizes.large.url;
+                            else if (data.featured_image.attachment_meta.sizes.hasOwnProperty('medium'))
+                                image = data.featured_image.attachment_meta.sizes.medium.url;
+                            else image = null;
+                        }
+                        var s = (data.excerpt)
+                        s = $(s).text().replace(/(\r\n|\n|\r)/gm, " ");
+                        preview = s.split(' ').slice(0, 25).join(' ') + " [...]";
+                        var likecount;
+                        preview.replace(/(['"])/g, "\\$1");
+                        $.get(M1_address_v2 + "?a=getlike&id=" + data.ID + "&random=" +
+                            Math.random(),
+                            function (data) {
+                                $('#Article_Likecount').html(data);
+                                M1_likecount = data;
+                            });
+                        if (Favorite_isFavorite(data.ID)) {
+                            cls = 'faa-spin animated favorite faa-slow';
+                            color = 'color :#F32A38';
+                        } else {
+                            cls = '';
+                            color = 'color :white;';
+                        }
+                        favorite = "class='actionslink' href='#' onclick=\"Favorite('" + data.ID + "')\"";
+                        share = "class='actionslink' href='#' onclick=\"window.plugins.socialsharing.share('" + preview + "', '" + data.title + "', '" + image + "', '" + data.link + "')\"";
+                        if (data.featured_image) {
+                            if (data.featured_image.attachment_meta.sizes.hasOwnProperty('large'))
+                                $('.Article_image').backstretch(data.featured_image.attachment_meta.sizes.large.url);
+                            else
+                                $('Article_image').backstretch(data.featured_image.attachment_meta.sizes.medium.url);
+                        }
+                        $('.Article_image').append("<div class='Article_meta'> <ons-row align='center' class='Article_actions' > <ons-col width='50px' style='position: absolute;left: 20px;'> <a " + favorite + "><i id='Favorite_" + data.ID + "' class='fa fa-star " + cls + "'></i></a>  <span class='likecount' id='Article_Likecount' style='" + color + "'>...</span></ons-col> <ons-col> </ons-col> <ons-col width='50px' style='position: absolute;right: 20px;'> <a " + share + "><i class='fa fa-share-alt'></i></a> </ons-col> </ons-row> </div>");
+
+                    }
+                });
+            };
+            $scope.apply;
+
+        });
+
+
+
+        // ----------------------------------------------------------------------------//
+        // ------------------------------- TEAM        ------------------------------- //
+        // ----------------------------------------------------------------------------//
+
+        Module.controller('TeamController', ['$scope', '$timeout',
+  function ($scope, $timeout) {
+                $scope.items = new Array();
+
+                $scope.isLoading = false;
+                $scope.Team = function () {
+                    $('.Team_image').backstretch("res/team.jpg");
+                    $.getJSON(M1_address + "posts/220", function (data) {
+                        $('.Team_content').empty();
+                        $('.Team_content').html(data.content);
+                        $('.Team_content').find('.page').removeClass('page');
+                        $('noscript').replaceWith(function () {
+                            return "<div class='team_image'>" + this.textContent || this.innerText + "</div>";
+                        });
+                        $('.team_image').find('img').addClass('circular');
+                        $('.Team_content').find('.hammy-responsive').css('display', 'inline-block');
+                        $('.Team_content').find('a').addClass('external');
+                        jQuery(".Team_content .tmm_sociallink").each(function () {
+                            if ($(this).attr('href').indexOf("facebook") != -1) {
+                                $(this).attr('onclick', 'Facebook(\'' + $(this).attr('href') + '\')').attr('href', '#').removeAttr('target', '');
+                            } else if ($(this).attr('href').indexOf("twitter") != -1) {
+                                $(this).attr('onclick', 'Twitter_u(\'' + $(this).attr('href') + '\')').attr('href', '#').removeAttr('target', '');
+                            } else if ($(this).attr('href').indexOf("instagram") != -1) {
+                                $(this).attr('onclick', 'Instagram(\'' + $(this).attr('href') + '\')').attr('href', '#').removeAttr('target', '');
+                            }
+                        });
+                        $(".size-full").click(function (e) {
+                            e.preventDefault();
+                        });
+
+                    });
+
+                };
+ }]);
+
+        // ----------------------------------------------------------------------------//
+        // ------------------------------- RANDOM      ------------------------------- //
+        // ----------------------------------------------------------------------------//
+        Module.controller('RandomController', function ($scope, $timeout) {
+            $('#shakemsg').html('Shak-a il tuo device!');
+            ShakeListener();
+
+        });
+
+        function ShakeListener() {
+            $('#shakemsg').html('Shak-a il tuo device!');
+            shake.startWatch(RandomShake, 40);
+        }
+
+        function RandomShake() {
+            $.getJSON(M1_address_v2 + "?a=random&nocache=" +
+                Math.random(),
+                function (data) {
+                    Navigator.pushPage('article.html', {
+                        animation: 'slide',
+                        id: data
+                    });
+                    $('#shakemsg').html('Vuoi Shake-are ancora una volta?');
+                    $('#shakeagain').fadeIn('slow');
+                });
+            shake.stopWatch();
+        }
+
+        // ----------------------------------------------------------------------------//
+        // ------------------------------- CERCA      ------------------------------- //
+        // ----------------------------------------------------------------------------//
+
+        Module.controller('CercaResultController', function ($scope, $timeout) {
+            $scope.items = new Array;
+            var query = Navigator.getCurrentPage().options.query;
+            SearchResult(query);
+            $('#search_name').html(Navigator.getCurrentPage().options.query);
+        });
+
+        function SearchResult(param) {
+                if (param.length > 0) {
+                    $('#search_header_post').empty();
+                    $.getJSON(M1_address + "posts?filter[post_status]=publish&filter[posts_per_page]=100&page=1&filter[orderby]=date&filter[order]=desc&filter[s]=" + param + "&rand=" + Math.random(), function (data) {
+
+                        $.each(data, function (idx, d) {
+                            if (d.status == 'publish') {
+                                $('#search_header_post').append('<a href="#" onclick="Navigator.pushPage(\'article.html\', { animation : \'slide\', id: ' + d.ID + ' })" ><div class="module Dash_cont" id="search_head_img_' + d.ID + '"><div id="dash_header_overlay"></div><header><h1>' + d.title + '</h1><pr>' + (CapitalizeEvery(d.author.name)) + '</pr><br></header></div></a>');
+                                if (d.featured_image) {
+                                    if (d.featured_image.attachment_meta.sizes.hasOwnProperty('large'))
+                                        $('#search_head_img_' + d.ID).backstretch(d.featured_image.attachment_meta.sizes.large.url);
+                                    else
+                                        $('#search_head_img_' + d.ID).backstretch(d.featured_image.attachment_meta.sizes.medium.url);
+                                }
+                            }
+                        });
+                        if (jQuery.isEmptyObject(data)) {
+                            $('#search_header_post').append('<div class="module Dash_cont" id="search_head_img_nf" style="position: absolute;height:101%"><div id="dash_header_overlay"></div><header><h1>Oops! Sembra non esserci nulla qua!</h1><pr>404 MESSAGE</pr><br></header></div>');
+                            $('#search_head_img_nf').backstretch('res/poly.jpg');
+                        }
+                    });
+                    $('#search_header_post').fadeIn();
+
+                } else {
+                    $('#search_header_post').append('<div class="module Dash_cont" id="search_head_img_nf" style="position: absolute;height:101%"><div id="dash_header_overlay"></div><header><h1>Inserisci la query di ricerca!</h1><pr>OOPS</pr><br></header></div>');
+                    $('#search_head_img_nf').backstretch('res/poly.jpg');
+                }
+            }
+            // ----------------------------------------------------------------------------//
+            // ------------------------------- EDITIONS    ------------------------------- //
+            // ----------------------------------------------------------------------------//
+        Module.controller('EdizioniController', function ($scope, $timeout) {
+            $scope.editions = M1_editions;
+        });
+
+        function Editions_fetchEditions(editions) {
+            $.getJSON(M1_address + "posts/types/posts/taxonomies/category/terms?rand=" + Math.random(), function (data) {
+                $.each(data, function (idx, d) {
+                    if (d.ID != 4) {
+                        editions.push({
+                            id: d.ID,
+                            name: $('<textarea />').html(d.name).text(),
+                            count: d.count,
+                            image: "res/logo.png"
+                        });
+                    }
+
+                });
+            });
+        }
+        Module.controller('EdizioneController', ['$scope', '$http', '$q', function ($scope, $http, $q) {
+            $('#ed_name').html(M1_edition_name);
+            Edizione();
+            $scope.Infinitescroll = {
+                configureItemScope: function (index, itemScope) {
+                    if (!itemScope.item) {
+                        itemScope.canceler = $q.defer();
+                        itemScope.item = {
+                            title: 'Caricamento...'
+                        };
+                        $http.get(M1_address + "posts?filter[post_status]=publish&filter[posts_per_page]=1&page=" + (index + 5) + "&filter[orderby]=date&filter[order]=desc&filter[cat]=" + M1_edition + "&rand=" + Math.random() + Math.random(), {
+                                timeout: itemScope.canceler.promise
+                            })
+                            .success(function (d) {
+                                if (d[0].status == 'publish') {
+                                    if (d[0].featured_image) {
+                                        if (d[0].featured_image.attachment_meta.sizes.hasOwnProperty('thumbnail'))
+                                            imagez = d[0].featured_image.attachment_meta.sizes.thumbnail.url;
+                                        else imagez = "res/logo.png";
+                                    }
+
+                                    itemScope.item.id = d[0].ID;
+                                    itemScope.item.title = $('<textarea />').html(d[0].title).text();
+                                    itemScope.item.author = $('<textarea />').html(CapitalizeEvery(d[0].author.name)).text();
+                                    itemScope.item.image = imagez + '?rand=' + Math.random();
+                                    itemScope.item.class = 'Tag_cont';
+                                }
+
+                            })
+
+
+                        .error(function () {
+                            itemScope.item.title = 'Impossibile caricare';
+                        });
+
+                    }
+                },
+                destroyItemScope: function (index, itemScope) {
+                    itemScope.canceler.resolve();
+                },
+                calculateItemHeight: function (index) {
+                    return 110;
+                },
+                countItems: function () {
+                    return M1_edition_count - 4;
+                }
+            }
+
+        }]);
+
+        function Edizione() {
+                $('#edizione_header_post').empty();
+                $.getJSON(M1_address + "posts?filter[post_status]=publish&filter[posts_per_page]=4&page=1&filter[orderby]=date&filter[order]=desc&filter[cat]=" + M1_edition + "&rand=" + Math.random(), function (data) {
+                    $('#edizione_header_post').empty();
+                    $.each(data, function (idx, d) {
+                        if (d.status == 'publish') {
+                            $('#edizione_header_post').append('<a href="#" onclick="Navigator.pushPage(\'article.html\', { animation : \'slide\', id: ' + d.ID + ' })" ><div class="module Dash_cont" id="edizione_head_img_' + d.ID + '"><div id="dash_header_overlay"></div><header><h1>' + d.title + '</h1><pr>' + (CapitalizeEvery(d.author.name)) + '</pr><br></header></div></a>');
+                            if (d.featured_image) {
+                                if (d.featured_image.attachment_meta.sizes.hasOwnProperty('large'))
+                                    $('#edizione_head_img_' + d.ID).backstretch(d.featured_image.attachment_meta.sizes.large.url);
+                                else
+                                    $('#edizione_head_img_' + d.ID).backstretch(d.featured_image.attachment_meta.sizes.medium.url);
+                            }
+                        }
+                    });
+                    if (jQuery.isEmptyObject(data)) {
+                        $('#edizione_header_post').append('<div class="module Dash_cont" id="edizione_head_img_nf" style="position: absolute;height:101%"><div id="dash_header_overlay"></div><header><h1>Oops! Sembra non esserci nulla qua!</h1><pr>404 MESSAGE</pr><br></header></div>');
+                        $('#edizione_head_img_nf').backstretch('res/poly.jpg');
+                    }
+                });
+                $('#edizione_header_post').fadeIn();
+
+            }
+            // ----------------------------------------------------------------------------//
+            // ------------------------------- TAGS    ----------------------------------- //
+            // ----------------------------------------------------------------------------//
+        function Tags_fetchTags(editions) {
+            $.getJSON(M1_address + "posts/types/posts/taxonomies/post_tag/terms?rand=" + Math.random(), function (data) {
+                $.each(data, function (idx, d) {
+                    if (d.ID != 4) {
+                        editions.push({
+                            id: d.ID,
+                            name: $('<textarea />').html(d.name).text(),
+                            slug: d.slug,
+                            count: d.count,
+                            image: "res/logo.png"
+                        });
+                    }
+
+                });
+            });
+        }
+
+        Module.controller('TagsController', function ($scope, $timeout) {
+            $scope.editions = M1_tags;
+        });
+        Module.controller('TagController', ['$scope', '$http', '$q', function ($scope, $http, $q) {
+            $('#tag_name').html('Tag <span class="uppercase">#' + M1_tag_name + '</span>');
+            Tag();
+            $scope.Infinitescroll = {
+                configureItemScope: function (index, itemScope) {
+                    if (!itemScope.item) {
+                        itemScope.canceler = $q.defer();
+                        itemScope.item = {
+                            title: 'Caricamento...'
+                        };
+                        $http.get(M1_address + "posts?filter[post_status]=publish&filter[posts_per_page]=1&page=" + (index + 5) + "&filter[orderby]=date&filter[order]=desc&filter[tag]=" + M1_tag_slug + "&rand=" + Math.random(), {
+                                timeout: itemScope.canceler.promise
+                            })
+                            .success(function (d) {
+                                if (d[0].status == 'publish') {
+                                    if (d[0].featured_image) {
+                                        if (d[0].featured_image.attachment_meta.sizes.hasOwnProperty('thumbnail'))
+                                            imagez = d[0].featured_image.attachment_meta.sizes.thumbnail.url;
+                                        else imagez = "res/logo.png";
+                                    }
+
+                                    itemScope.item.id = d[0].ID;
+                                    itemScope.item.title = $('<textarea />').html(d[0].title).text();
+                                    itemScope.item.author = $('<textarea />').html(CapitalizeEvery(d[0].author.name)).text();
+                                    itemScope.item.image = imagez + '?rand=' + Math.random();
+                                    itemScope.item.class = 'Tag_cont';
+                                }
+
+                            })
+
+
+                        .error(function () {
+                            itemScope.item.title = 'Impossibile caricare';
+                        });
+
+                    }
+                },
+                destroyItemScope: function (index, itemScope) {
+                    itemScope.canceler.resolve();
+                },
+                calculateItemHeight: function (index) {
+                    return 110;
+                },
+                countItems: function () {
+                    return M1_tag_count - 4;
+                }
+            }
+
+        }]);
+
+        function Tag() {
+            $('#tag_header_post').empty();
+            $('#header_post').before("<div class='spinner' style='z-index:1;' id='tagloader'></div>");
+            $.getJSON(M1_address + "posts?filter[post_status]=publish&filter[posts_per_page]=4&page=1&filter[orderby]=date&filter[order]=desc&filter[tag]=" + M1_tag_slug + "&rand=" + Math.random(), function (data) {
+                $('#tag_header_post').empty();
+                $('#tagloader').fadeOut().remove();
+                $.each(data, function (idx, d) {
+                    if (d.status == 'publish') {
+                        $('#tag_header_post').append('<a href="#" onclick="Navigator.pushPage(\'article.html\', { animation : \'slide\', id: ' + d.ID + ' })" ><div class="module Dash_cont" id="tag_head_img_' + d.ID + '"><div id="dash_header_overlay"></div><header><h1>' + d.title + '</h1><pr>' + (CapitalizeEvery(d.author.name)) + '</pr><br></header></div></a>');
+                        if (d.featured_image) {
+                            if (d.featured_image.attachment_meta.sizes.hasOwnProperty('large'))
+                                $('#tag_head_img_' + d.ID).backstretch(d.featured_image.attachment_meta.sizes.large.url);
+                            else
+                                $('#tag_head_img_' + d.ID).backstretch(d.featured_image.attachment_meta.sizes.medium.url);
+                        }
+                    }
+                });
+                if (jQuery.isEmptyObject(data)) {
+                    $('#tag_header_post').append('<div class="module Dash_cont" id="edizione_head_img_nf" style="position: absolute;height:101%"><div id="dash_header_overlay"></div><header><h1>Oops! Sembra non esserci nulla qua!</h1><pr>404 MESSAGE</pr><br></header></div>');
+                    $('#edizione_head_img_nf').backstretch('res/poly.jpg');
+                }
+            });
+            $('#tag_header_post').fadeIn();
+
+        }
+
+        // ----------------------------------------------------------------------------//
+        // ------------------------------- AUTHOR  ----------------------------------- //
+        // ----------------------------------------------------------------------------//
+        Module.controller('AuthorController', function ($scope, $timeout) {
+            $scope.items = new Array;
+            $('#author_toolbar_name').html(M1_author_name);
+            $('.AuthorPage_name').html(M1_author_name);
+            $('.AuthorPage_image').attr('src', M1_author_image);
+            $('.AuthorPage_bio').html(M1_author_bio);
+            $('.profile-card').backstretch('res/poly.jpg').css('background', '#000');
+            $('.profile-card').find('.backstretch').css('opacity', 0.65);
+            Author();
+        });
+
+        function Author() {
+                $('#author_header_post').empty();
+
+                $.getJSON(M1_address + "posts?filter[post_status]=publish&filter[posts_per_page]=100&page=1&filter[orderby]=date&filter[order]=desc&filter[author]=" + M1_author + "&rand=" + Math.random(), function (data) {
+
+                    $.each(data, function (idx, d) {
+                        if (d.status == 'publish') {
+                            $('#author_header_post').append('<a href="#" onclick="Navigator.pushPage(\'article.html\', { animation : \'slide\', id: ' + d.ID + ' })" ><div class="module Dash_cont" id="author_head_img_' + d.ID + '"><div id="dash_header_overlay"></div><header><h1>' + d.title + '</h1><pr>' + (CapitalizeEvery(d.author.name)) + '</pr><br></header></div></a>');
+                            if (d.featured_image) {
+                                if (d.featured_image.attachment_meta.sizes.hasOwnProperty('large'))
+                                    $('#author_head_img_' + d.ID).backstretch(d.featured_image.attachment_meta.sizes.large.url);
+                                else
+                                    $('#author_head_img_' + d.ID).backstretch(d.featured_image.attachment_meta.sizes.medium.url);
+                            }
+                        }
+                    });
+                    if (jQuery.isEmptyObject(data)) {
+                        $('#author_header_post').append('<div class="module Dash_cont" id="edizione_head_img_nf" style="position: absolute;height:101%"><div id="dash_header_overlay"></div><header><h1>Oops! Sembra non esserci nulla qua!</h1><pr>404 MESSAGE</pr><br></header></div>');
+                        $('#edizione_head_img_nf').backstretch('res/poly.jpg');
+                    }
+                });
+                $('#author_header_post').fadeIn();
+
+            }
+            // ----------------------------------------------------------------------------//
+            // ------------------------------- FAVORITE----------------------------------- //
+            // ----------------------------------------------------------------------------//
+
+        function Favorite(id) {
+            if (window.localStorage.getItem("M1_Login") == 'true') {
+                if (Favorite_isFavorite(id) == false) {
+                    $("#Favorite_" + id).toggleClass('faa-spin faa-slow animated favorite');
+                    $('#Article_Likecount').css('color', '#F32A38');
+                    $('#Article_Likecount').html(M1_likecount + 1);
+                    $.get(M1_address_v2 + "?a=like&devid=" + window.M1_DevID + "&devsecret=" + window.M1_DevSecret + "&id=" + id + "&like=1&random=" +
+                        Math.random(),
+                        function (data) {
+                            if (data === true) {
+                                window.M1_likecount = M1_likecount + 1;
+                            } else navigator.notification.alert('Si è verificato un\'errore #2.', emptyCallback, 'M1', 'OK');
+                        });
+
+                } else {
+                    $("#Favorite_" + id).removeClass('faa-spin faa-slow animated favorite');
+                    $('#Article_Likecount').html(M1_likecount - 1);
+                    $('#Article_Likecount').css('color', 'white');
+                    $.get(M1_address_v2 + "?a=like&devid=" + window.M1_DevID + "&devsecret=" + window.M1_DevSecret + "&id=" + id + "&like=0&random=" +
+                        Math.random(),
+                        function (data) {
+                            if (data === true) {
+                                window.M1_likecount = M1_likecount - 1;
+                            } else navigator.notification.alert('Si è verificato un\'errore.  #1', emptyCallback, 'M1', 'OK');
+                        });
+
+                }
+                API_FetchLiked();
+            } else navigator.notification.alert('Per aggiungere una star devi effettuare il login nella sezione account.', emptyCallback, 'M1', 'OK');
+        }
+
+        function Favorite_isFavorite(id) {
+            id = '' + id;
+            var liked = window.localStorage.getItem("M1Profile_liked");
+            if (window.localStorage.getItem("M1Profile_liked") === null) {
+                return false;
+            } else {
+                var results = liked.split(',');
+                if (results.indexOf(id) == -1)
+                    return false;
+                else
+                    return true;
+            }
+        }
+
+
+
+
+        // ----------------------------------------------------------------------------//
+        // ------------------------------- CROSSAPP    ------------------------------- //
+        // ----------------------------------------------------------------------------//
+        function Spotify(url) {
+            var trackid = url.replace("https://embed.spotify.com/?uri=", "");
+            appAvailability.check(
+                'spotify://',
+                function () {
+                    window.open('spotify://' + trackid, '_system', 'location=no');
+                },
+                function () {
+                    Broswer(url);
+                }
+            );
+
+        }
+
+        function Instagram(url) {
+            var tid = url.replace("https://instagram.com/", "");
+            tid = url.replace("http://instagram.com/", "");
+            appAvailability.check(
+                'instagram://',
+                function () {
+                    window.open('instagram://user?username=' + tid, '_system', 'location=no');
+                },
+                function () {
+                    Broswer(url);
+                }
+            );
+
+        }
+
+        function getBase64Image(img) {
+            var image = new Image();
+            var canvas = document.createElement('canvas');
+            var context = canvas.getContext('2d');
+
+            image.src = data.data;
+            context.drawImage(image, 0, 0);
+            document.body.appendChild(canvas);
+
+        }
+
+        function Facebook(url) {
+            var tid = url.replace("https://facebook.com/", "");
+            tid = url.replace("http://facebook.com/", "");
+            appAvailability.check(
+                'fb://',
+                function () {
+                    window.open('fb://profile?id=' + tid, '_system', 'location=no');
+                },
+                function () {
+                    Broswer(url);
+                }
+            );
+
+        }
+
+        function Twitter_u(url) {
+            var tid = url.replace("https://twitter.com/", "");
+            tid = url.replace("http://twitter.com/", "");
+            appAvailability.check(
+                'twitter://',
+                function () {
+                    window.open('twitter://user?screen_name=' + tid, '_system', 'location=no');
+                },
+                function () {
+                    Broswer(url);
+                }
+            );
+
+        }
+
+        function Youtube(url) {
+            appAvailability.check(
+                'youtube://',
+                function () {
+                    window.open(url, '_system', 'location=no');
+                },
+                function () {
+                    Broswer(url);
+                }
+            );
+
+        }
+
+        function Twitter() {
+            appAvailability.check(
+                'twitter://',
+                function () {
+                    window.open('twitter://user?screen_name=MAJOCLOCK', '_system', 'location=no');
+                },
+                function () {
+                    Broswer("http://twitter.com/MAJOCLOCK")
+                }
+            );
+
+        }
+
+        function Facebook_d() {
+            appAvailability.check(
+                'twitter://',
+                function () {
+                    window.open('fb://profile?id=M1Majo', '_system', 'location=no');
+                },
+                function () {
+                    Broswer("http://facebook.com/M1Majo")
+                }
+            );
+
+        }
+
+        function Broswer(urlString) {
+            myURL = encodeURI(urlString);
+            window.open(myURL, '_blank', 'location=no');
+        }
+    </script>
+
+</head>
+
+<body>
+
+    <ons-sliding-menu menu-page="menu.html" main-page="dash.html" side="left" var="menu" type="reveal" max-slide-distance="260px" swipable="false">
+    </ons-sliding-menu>
+    <ons-modal var="modal">
+
+        <center>
+            <img src='res/logo.png' height='75px'>
+            <br>
+            <br>
+        </center>
+        <div style='margin: 5%'>
+            <h3>Waiting for an internet connection.</h3>
+            <br>M1 requires an active network connection.
+            <br> Please activate the Mobile network or connect to a Wi-FI network.
+        </div>
+    </ons-modal>
+
+    <ons-template id="menu.html">
+        <ons-page modifier="menu-page">
+            <ons-toolbar modifier="transparent"></ons-toolbar>
+
+            <ons-list class="menu-list">
+                <center><img src='res/logo.png' height='75px'>
+                    <br>
+                </center>
+                <ons-list-item class="menu-item" ng-click="menu.setMainPage('dash.html', {closeMenu: true})">
+                    <ons-icon icon="fa-home"></ons-icon>
+                    Dashboard
+                </ons-list-item>
+
+                <ons-list-item class="menu-item" ng-click="menu.setMainPage('filters.html', {closeMenu: true})">
+                    <ons-icon icon="fa-filter"></ons-icon>
+                    Filters
+                </ons-list-item>
+                <ons-list-item class="menu-item" ng-click="menu.setMainPage('random.html', {closeMenu: true})">
+                    <ons-icon icon="fa-random"></ons-icon>
+                    Random
+                </ons-list-item>
+
+                <ons-list-item class="menu-item" ng-click="menu.setMainPage('account.html', {closeMenu: true})">
+                    <ons-icon icon="fa-user"></ons-icon>
+                    Account
+                </ons-list-item>
+                <ons-list-item class="menu-item" ng-click="menu.setMainPage('team.html', {closeMenu: true})">
+                    <ons-icon icon="fa-rocket"></ons-icon>
+                    About
+                </ons-list-item>
+            </ons-list>
+            <div style='position:absolute;bottom:10px;left:10px;color: rgba(255, 255, 255, 0.7);'>
+                <a ng-click="menu.setMainPage('legal.html', {closeMenu: true})"><i class="ion-ios-information"></i></a>
+            </div>
+        </ons-page>
+    </ons-template>
+    <ons-template id="legal.html">
+
+        <ons-page ng-controller="AboutController">
+            <ons-navigator title="Navigator" var="Navigator">
+                <ons-toolbar>
+                    <div class="left">
+                        <ons-toolbar-button ng-click="menu.toggle()">
+                            <ons-icon icon="ion-navicon" size="28px" fixed-width="false"></ons-icon>
+                        </ons-toolbar-button>
+                    </div>
+                    <div class="center">About & Legal</div>
+                </ons-toolbar>
+                <div id='zeroimg' style='display:none;position:absolute;width:100%;height:40%;'></div>
+                <!-- <video id='zerovideo' width='100%' onended="VideoEnd();" height='auto' autoplay>
+                    <source src="res/zero.mp4" type="video/mp4">
+                </video>-->
+                <div class='Article_content' id='zerocredits' style="display:none;position:absolute;top:41%;font-size:13px;">
+                    <center>
+
+                        <p>Copyright &copy; 2015 - <a href='#' onclick="Broswer('http://zerotofuture.com')" class='favorite'>ZERO&#8482;</a>
+                    </center>
+                    </p>
+                    <br>
+                    <p> Imagined, designed and coded for M1 ONLINE - IIS Majorana.
+                        <br> First version coded in March 2015 and published in April 2015.
+                        <br> Main developer <a href='#' onclick="Broswer('http://dragotto.net')" class='favorite'>Gabriele Dragotto</a>
+                    </p>
+                    <p>Content rights belong to &copy; 2015 - M1 ONLINE - <a href='#' onclick="Broswer('http://m1.majo.us')" class='favorite'>www.m1.majo.us</a>
+                    </p>
+                    <br>
+                    <hr>
+                    <h5>App Version</h5>
+                    <SPAN id='ver'>
+                    </span>
+                    <hr>
+                    <h5>Content license</h5> M1 ONLINE is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License. To view a copy of this license, visit <a href='#' class='favorite' onclick='Broswer("http://creativecommons.org/licenses/by-nc-sa/4.0/")' rel="license"> http://creativecommons.org/licenses/by-nc-sa/4.0/</a> or send a letter to Creative Commons, PO Box 1866, Mountain View, CA 94042, USA.</p>
+                    <br>
+
+                    <hr>
+                    <h5>Phonegap License</h5>
+                    <p>
+                        The PhoneGap code was contributed to the Apache Software Foundation (ASF) under the name Apache Cordova. Through the ASF, future PhoneGap development will ensure open stewardship of the project. It will always remain free and open source under the Apache License, Version 2.0.</p>
+                    <br>
+                    <hr>
+                    <h5>Onsen-ui License</h5>
+                    <p>
+                        Onsen UI is released under the Apache License and development is housed on Github. It is free and open for anyone to use. Released under Apache License, Version 2.0.</p>
+                </div>
+            </ons-navigator>
+        </ons-page>
+    </ons-template>
+
+    <ons-template id="random.html">
+
+        <ons-page ng-controller="RandomController">
+            <ons-navigator title="Navigator" var="Navigator">
+                <ons-toolbar>
+                    <div class="left">
+                        <ons-toolbar-button ng-click="menu.toggle()">
+                            <ons-icon icon="ion-navicon" size="28px" fixed-width="false"></ons-icon>
+                        </ons-toolbar-button>
+                    </div>
+                    <div class="center">Random</div>
+                </ons-toolbar>
+                <div class='Article_content_2' style="text-align: center;font-size:13px;" data-ng-init="Random()">
+                    <br>
+
+                    <blockquote>
+                        <p><em>Shake it up, shake it up!</em>
+                        </p>
+                    </blockquote>
+                    <p>Agita il dispositivo (shake) per ottenere un articolo casuale tra quelli presenti in M1.
+                        <br>
+                    </p>
+                    <br>
+                    <div id='shakeagain' style='display:none;position:relative;'>
+                        <p id='shakemsg'>Vuoi shake-are ancora?</p>
+
+                        <a class="button button--outline" onclick='ShakeListener()'>Ancora!</a>
+                        </p>
+                    </div>
+                </div>
+                <div class='spinner'></div>
+            </ons-navigator>
+        </ons-page>
+    </ons-template>
+
+    <ons-template id="account.html">
+
+        <ons-page ng-controller='AccountController' ng-init='init'>
+            <ons-navigator title="Navigator" var="Navigator">
+                <ons-toolbar>
+                    <div class="left">
+                        <ons-toolbar-button ng-click="menu.toggle()">
+                            <ons-icon icon="ion-navicon" size="28px" fixed-width="false"></ons-icon>
+                        </ons-toolbar-button>
+                    </div>
+                    <div class="center">Account</div>
+                </ons-toolbar>
+                <div id='LoginForm' class="login-form" style='display:none'>
+                    <div class='Article_content_2' style="text-align: center;font-size:13px;">
+                        <br>
+                        <center><img src='res/logo.png' height='75px'>
+                        </center>
+                        <br>
+                        <h4>Accedi al tuo account.</h4>
+
+                        <br>
+
+
+                        <input type="email" id='login_username' class="text-input--underbar" placeholder="Username o email" value="">
+                        <input type="password" id='login_password' class="text-input--underbar" placeholder="Password" value="">
+                        <br>
+                        <br>
+                        <ons-button class="login-button button button--outline" onclick="API_Login($('#login_username').val(), encodeURI($('#login_password').val()))">Log In</ons-button>
+                        <br>
+                        <br>
+                        <ons-button modifier="quiet" class="forgot-password" onclick="Broswer('http://m1.majo.us/auth?action=lostpassword')">Password persa?</ons-button>
+                        <ons-button modifier="quiet" class="forgot-password" onclick="Broswer('http://m1.majo.us/auth?action=register')">Registrati</ons-button>
+                    </div>
+                </div>
+                <div id='LoginProfile' style='display:none'>
+                    <div class="profile-card">
+
+                        <img id='PProfile_image' class="profile-image">
+                        <div class="profile-name" id='PProfile_name'>Loading...</div>
+                        <div class="profile-id" id='PProfile_username'>...</div>
+                        <div class="profile-desc" id='PProfile_email'>...</div>
+                        <br>
+                        <br>
+                        <div class="profile-desc">
+                            <ons-button class="login-button button button--outline" style='color: #f32a38; text-transform: uppercase; width: 80%;' onclick="API_Logout()">Logout</ons-button>
+                        </div>
+                    </div>
+                    <ons-list id='star_post'></ons-list>
+                </div>
+                </p>
+                <br>
+
+
+            </ons-navigator>
+        </ons-page>
+    </ons-template>
+
+
+
+
+
+    <ons-template id="search2.html">
+        <ons-navigator title="Navigator" var="Navigator">
+            <ons-page>
+                <ons-toolbar title="CercaToolbar" var="CercaToolbar">
+                    <div class="left">
+                        <ons-back-button icon="ion-arrow-left-c" fixed-width="false"></ons-back-button>
+                    </div>
+                    <div class="center">Cerca</div>
+                </ons-toolbar>
+                <div class='Article_content_2' style="text-align: center;font-size:13px;">
+                    <br>
+
+
+                    <p>Inserisci il <b>termine</b> da ricercare all'interno di M1.
+                        <br> E' possibile inserire parole chiave, tag, edizione, parole contenute nel titolo o nell'articolo stesso.
+
+                        <br>
+                        <br>
+                        <input type="search" class="search-input" id='SearchQuery'>
+                        <br>
+                        <a class="button button--outline" style='width: 100%;' onclick="Navigator.pushPage('cerca_result.html', { animation : 'slide', query: $('#SearchQuery').val() });">Cerca</a>
+                    </p>
+                    <br>
+                </div>
+            </ons-page>
+        </ons-navigator>
+    </ons-template>
+
+    <ons-template id="search.html">
+
+        <ons-page>
+            <ons-toolbar title="CercaToolbar" var="CercaToolbar">
+                <div class="left">
+                    <ons-back-button icon="ion-arrow-left-c" fixed-width="false"></ons-back-button>
+                </div>
+                <div class="center">Cerca</div>
+            </ons-toolbar>
+            <div class='Article_content_2' style="text-align: center;font-size:13px;">
+                <br>
+
+
+                <p>Inserisci il <b>termine</b> da ricercare all'interno di M1.
+                    <br> E' possibile inserire parole chiave, tag, edizione, parole contenute nel titolo o nell'articolo stesso.
+
+                    <br>
+                    <br>
+                    <input type="search" class="search-input" id='SearchQuery'>
+                    <br>
+                    <a class="button button--outline" style='width: 100%;' onclick="Navigator.pushPage('cerca_result.html', { animation : 'slide', query: $('#SearchQuery').val() });">Cerca</a>
+                </p>
+                <br>
+            </div>
+        </ons-page>
+    </ons-template>
+
+    <ons-template id="cerca_result.html">
+        <ons-page ng-controller="CercaResultController">
+            <ons-toolbar title="CercaResultToolbar" var="CercaResultToolbar">
+                <div class="left">
+                    <ons-back-button icon="ion-arrow-left-c" fixed-width="false"></ons-back-button>
+                </div>
+                <div class="center" id='search_name'></div>
+            </ons-toolbar>
+
+            <ons-list id='search_header_post'></ons-list>
+        </ons-page>
+    </ons-template>
+
+
+
+    <ons-template id="filters.html">
+
+        <ons-page>
+            <ons-navigator title="Navigator" var="Navigator">
+                <ons-toolbar>
+                    <div class="left">
+                        <ons-toolbar-button ng-click="menu.toggle()">
+                            <ons-icon icon="ion-navicon" size="28px" fixed-width="false"></ons-icon>
+                        </ons-toolbar-button>
+                    </div>
+                    <div class="center">Filters</div>
+                </ons-toolbar>
+                <ons-list>
+                    <ons-list-item modifier="chevron" class="list-item-container">
+                        <ons-row ng-click="Navigator.pushPage('search.html', {animation : 'slide'});">
+                            <ons-col width="95px">
+                                <i class='fa fa-search' style='font-size:30px;'></i>
+                            </ons-col>
+                            <ons-col>
+                                <span class='catname2'>Cerca</span>
+                            </ons-col>
+                            <ons-col width="40px"></ons-col>
+                        </ons-row>
+                    </ons-list-item>
+                    <ons-list-item modifier="chevron" class="list-item-container">
+                        <ons-row ng-click="Navigator.pushPage('tags.html', {animation : 'slide'});">
+                            <ons-col width="95px">
+                                <i class='fa fa-tags' style='font-size:30px;'></i>
+                            </ons-col>
+                            <ons-col>
+                                <span class='catname2'>Tags</span>
+                            </ons-col>
+                            <ons-col width="40px"></ons-col>
+                        </ons-row>
+                    </ons-list-item>
+                    <ons-list-item modifier="chevron" class="list-item-container">
+                        <ons-row ng-click="Navigator.pushPage('edizioni.html', {animation : 'slide'});">
+                            <ons-col width="95px">
+                                <i class='fa fa-list-ul' style='font-size:30px;'></i>
+                            </ons-col>
+                            <ons-col>
+                                <span class='catname2'>Edizioni</span>
+                            </ons-col>
+                            <ons-col width="40px"></ons-col>
+                        </ons-row>
+                    </ons-list-item>
+                </ons-list>
+            </ons-navigator>
+        </ons-page>
+    </ons-template>
+
+
+
+    <ons-template id="edizioni.html">
+
+        <ons-page ng-controller="EdizioniController">
+            <ons-toolbar title="EdizioniToolbar" var="EdizioniToolbar">
+                <div class="left">
+                    <ons-back-button icon="ion-arrow-left-c" fixed-width="false"></ons-back-button>
+                </div>
+                <div class="center">Edizioni</div>
+            </ons-toolbar>
+            <ons-list>
+                <ons-list-item ng-repeat="e in editions" modifier="chevron" class="list-item-container" id="Edit_{{e.id}}">
+                    <ons-row atrid="{{e.id}}" edname="{{e.name}}" count="{{e.count}}" onclick="M1_edition=$(this).attr('atrid');M1_edition_name=$(this).attr('edname');M1_edition_count=$(this).attr('count');Navigator.pushPage('edizione.html', { animation : 'slide', id: $(this).attr('atrid') });">
+                        <ons-col width="95px">
+                            <img class='thubnail_img_div' style='background-image: url("{{e.image}}")'></img>
+                        </ons-col>
+                        <ons-col>
+                            <span class='catname'>{{e.name}}</span>
+                        </ons-col>
+                        <ons-col width="40px"></ons-col>
+                    </ons-row>
+                </ons-list-item>
+            </ons-list>
+        </ons-page>
+    </ons-template>
+
+
+    <ons-template id="tags.html">
+
+        <ons-page ng-controller="TagsController">
+            <ons-toolbar title="TagsToolbar" var="TagsToolbar">
+                <div class="left">
+                    <ons-back-button icon="ion-arrow-left-c" fixed-width="false"></ons-back-button>
+                </div>
+                <div class="center">Tag</div>
+            </ons-toolbar>
+            <ons-list>
+                <ons-list-item ng-repeat="e in editions" modifier="chevron" class="list-item-container" id="Edit_{{e.id}}">
+                    <ons-row atrid="{{e.id}}" edname="{{e.name}}" slug="{{e.slug}}" count="{{e.count}}" onclick="M1_tag=$(this).attr('atrid');M1_tag_name=$(this).attr('edname');M1_tag_slug=$(this).attr('slug');M1_tag_count=$(this).attr('count');Navigator.pushPage('tag.html', { animation : 'slide', id: $(this).attr('atrid') });">
+                        <ons-col width="95px">
+                            <img class='thubnail_img_div' style='background-image: url("{{e.image}}")'></img>
+                        </ons-col>
+                        <ons-col>
+                            <span class='catname' style='text-transform:uppercase;font-size:14px;'>#{{e.name}}</span>
+                        </ons-col>
+                        <ons-col width="40px"></ons-col>
+                    </ons-row>
+                </ons-list-item>
+            </ons-list>
+        </ons-page>
+    </ons-template>
+
+
+    <ons-template id="edizione.html">
+        <ons-page ng-controller="EdizioneController">
+            <ons-toolbar title="EdizioneToolbar" var="EdizioneToolbar">
+                <div class="left">
+                    <ons-back-button icon="ion-arrow-left-c" fixed-width="false"></ons-back-button>
+                </div>
+                <div class="center" id='ed_name'></div>
+            </ons-toolbar>
+
+            <div id='edizione_header_post' style='min-height: 100%;'></div>
+            <ons-list id='edizione_list' style='position: relative;overflow:hidden;'>
+                <ons-list-item ons-lazy-repeat="Infinitescroll" modifier="chevron" class="list-item-container" id="Prv_{{item.id}}" class='{{item.class}}'>
+                    <ons-row onclick="Navigator.pushPage('article.html', { animation : 'slide', id: $(this).attr('artid') });" artid='{{item.id}}'>
+                        <ons-col width="95px">
+                            <img class='thubnail_img_div' style='background-image: url("{{item.image}}")'></img>
+                        </ons-col>
+                        <ons-col>
+                            <div class="name_inner">
+                                {{item.title}}
+                            </div>
+                            <div class="location">
+                                {{item.author}}
+                            </div>
+                        </ons-col>
+                        <ons-col width="40px"></ons-col>
+                    </ons-row>
+                </ons-list-item>
+            </ons-list>
+        </ons-page>
+    </ons-template>
+
+
+    <ons-template id="tag.html">
+        <ons-page ng-controller="TagController">
+            <ons-toolbar title="TagToolbar" var="TagToolbar">
+                <div class="left">
+                    <ons-back-button icon="ion-arrow-left-c" fixed-width="false"></ons-back-button>
+                </div>
+                <div class="center" id='tag_name'></div>
+            </ons-toolbar>
+
+            <div id='tag_header_post' style='min-height: 100%;'></div>
+            <ons-list id='tag_list' style='position: relative;overflow:hidden;'>
+                <ons-list-item ons-lazy-repeat="Infinitescroll" modifier="chevron" class="list-item-container" id="Prv_{{item.id}}" class='{{item.class}}'>
+                    <ons-row onclick="Navigator.pushPage('article.html', { animation : 'slide', id: $(this).attr('artid') });" artid='{{item.id}}'>
+                        <ons-col width="95px">
+                            <img class='thubnail_img_div' style='background-image: url("{{item.image}}")'></img>
+                        </ons-col>
+                        <ons-col>
+                            <div class="name_inner">
+                                {{item.title}}
+                            </div>
+                            <div class="location">
+                                {{item.author}}
+                            </div>
+                        </ons-col>
+                        <ons-col width="40px"></ons-col>
+                    </ons-row>
+                </ons-list-item>
+            </ons-list>
+        </ons-page>
+    </ons-template>
+
+    <ons-template id="author.html">
+        <ons-page ng-controller="AuthorController">
+            <ons-toolbar title="AuthorToolbar" var="TagToolbar">
+                <div class="left">
+                    <ons-back-button icon="ion-arrow-left-c" fixed-width="false"></ons-back-button>
+                </div>
+                <div class="center" id='author_toolbar_name'></div>
+            </ons-toolbar>
+            <div class="profile-card">
+
+                <img src="" class="profile-image AuthorPage_image">
+                <div class="profile-name AuthorPage_name">Dave Graham</div>
+                <div class="profile-id AuthorPage_url"></div>
+                <div class="profile-desc AuthorPage_bio">Freelance designer, software engineer and cyclist</div>
+
+            </div>
+            <ons-list id='author_header_post'></ons-list>
+        </ons-page>
+    </ons-template>
+
+    <ons-template id="dash.html">
+        <ons-navigator title="Navigator" var="Navigator">
+            <ons-page ng-controller="DashboardController">
+                <ons-toolbar>
+                    <div class="left">
+                        <ons-toolbar-button ng-click="menu.toggle()">
+                            <ons-icon icon="ion-navicon" size="28px" fixed-width="false"></ons-icon>
+                        </ons-toolbar-button>
+                    </div>
+                    <div class="center">Top Stories</div>
+                </ons-toolbar>
+
+                <div id='header_post'>
+                    <div class='spinner'></div>
+                </div>
+
+
+                <ons-list id='dash_list' style='position: relative;overflow:hidden;'>
+                    <ons-list-item ons-lazy-repeat="Infinitescroll" modifier="chevron" class="list-item-container" id="Prv_{{item.id}}" class='{{item.class}}'>
+                        <ons-row onclick="Navigator.pushPage('article.html', { animation : 'slide', id: $(this).attr('artid') });" artid='{{item.id}}'>
+                            <ons-col width="95px">
+                                <img class='thubnail_img_div' style='background-image: url("{{item.image}}")'></img>
+                            </ons-col>
+                            <ons-col>
+                                <div class="name_inner">
+                                    {{item.title}}
+                                </div>
+                                <div class="location">
+                                    {{item.author}}
+                                </div>
+                            </ons-col>
+                            <ons-col width="40px"></ons-col>
+                        </ons-row>
+                    </ons-list-item>
+                </ons-list>
+            </ons-page>
+        </ons-navigator>
+    </ons-template>
+
+    <ons-template id="team.html">
+        <ons-page ng-controller="TeamController" data-ng-init="Team()" modifier="team">
+            <ons-toolbar>
+                <div class="left">
+                    <ons-toolbar-button ng-click="menu.toggle()">
+                        <ons-icon icon="ion-navicon" size="28px" fixed-width="false"></ons-icon>
+                    </ons-toolbar-button>
+                </div>
+                <div class="center">M1 Team</div>
+            </ons-toolbar>
+            <div class="Team_image">
+                <div id="Team_image_overlay"></div>
+                <header>
+                    <h1 class='Team_title'>About</h1>
+                    <br>
+                </header>
+            </div>
+            <br>
+            <div id='about'>
+                <center>
+                    <br>
+                    <br>
+                    <a onclick="Facebook_d()"><i class="fa fa-facebook" style="font-size: 50px;color: #F32A38;"></i></a> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                    <a onclick="Twitter()"><i class="fa fa-twitter" style="font-size: 50px;color: #F32A38;"></i></a>
+
+
+                </center>
+            </div>
+            <div class='Team_content'>
+                <br>
+                <center><img src='res/load.gif' height='15px'>
+                </center>
+            </div>
+
+            <div id='Team_cont' style="margin-top: 100px;">
+
+            </div>
+        </ons-page>
+    </ons-template>
+
+
+    <ons-template id="article.html">
+        <ons-page ng-controller="ArticleController" modifier="article" data-ng-init="Article()" id='ArtPage'>
+            <ons-toolbar id='ArticleToolbar' title="ArticleToolbar" var="ArticleToolbar" modifier='transparent'>
+                <div class="left">
+                    <ons-back-button icon="ion-arrow-left-c" style="color: white; font-size: 28px;margin-left:-4px;" fixed-width="false"></ons-back-button>
+                </div>
+            </ons-toolbar>
+            <div class="Article_image" id='Article_imgz'>
+                <div id="Article_image_overlay"></div>
+                <header>
+                    <h1 class='Article_title'><center><img src='res/load.gif' height='15px'></h1>
+                    <pr class='Article_author'>Loading...</pr>
+                    <br>
+                </header>
+            </div>
+            <br>
+            <div class='Article_content'>
+
+            </div>
+            <div class="author-post-section">
+                <ons-list modifier="chevron">
+                    <ons-list-item modifier="chevron">
+                        <ons-row class="profile-wrapper" onclick="Navigator.pushPage('author.html', { animation : 'slide' });">
+                            <ons-col width="76px" class="profile-image-wrapper">
+                                <a class="author-post-picture"></a><img src="" style='height:60px;width:60px;' class="Article_author_picture circular">
+                                </a>
+                            </ons-col>
+
+                            <ons-col>
+                                <div class="profile-name Article_author"></div>
+                                <div class="profile-email Article_author_bio"></div>
+                            </ons-col>
+
+
+                        </ons-row>
+                    </ons-list-item>
+                </ons-list>
+                <br>
+
+
+            </div>
+            <center>
+                <h4 style='opacity:0.7'><span id='Comments_num'></span> COMMENTI</h4>
+            </center>
+            <ons-list data-ng-init="Comments()">
+                <ons-list-item modifier='chevron' ng-click="Navigator.pushPage('comment.html', { animation : 'slide'})" class="list-item-container" style='overflow: hidden;'>
+                    <div class="list-item-left">
+                        <img src="res/comment.png" class="avator circular">
+                    </div>
+                    <div class="list-item-right">
+                        <div class="list-item-content">
+                            <div class="name">Commenta
+
+                            </div>
+
+                            <span class="desc">Aggiungi un commento</span>
+
+                        </div>
+                    </div>
+                </ons-list-item>
+                <ons-list-item ng-repeat="comment in comments" class="list-item-container" style='overflow: hidden;'>
+                    <div class="list-item-left">
+                        <img src="{{comment.avatar}}" class="avator circular">
+                    </div>
+                    <div class="list-item-right">
+                        <div class="list-item-content">
+                            <div class="name">{{comment.name}}
+                                <span class="lucent" style='font-size:11px;'>{{comment.username}}</span>
+                            </div>
+
+                            <span class="desc">{{comment.content}}</span>
+                            <br><span class='desc' style='font-size:10px;text-transform:uppercase;opacity:0.6;'>{{comment.data}}</span>
+                        </div>
+                    </div>
+                </ons-list-item>
+
+            </ons-list>
+        </ons-page>
+    </ons-template>
+    <ons-template id="comment.html">
+
+        <ons-page ng-controller='CommentController' ng-init='init'>
+            <ons-toolbar>
+                <div class="left">
+                    <ons-back-button icon="ion-arrow-left-c" style="color: white; font-size: 28px;margin-left:-4px;" fixed-width="false"></ons-back-button>
+                </div>
+                <div class="center">Commenta</div>
+            </ons-toolbar>
+            <div>
+                <div class='Article_content_2' style="text-align: center;font-size:13px;">
+                    <br>
+                    <center><img src='res/comment.png' height='75px'>
+                    </center>
+                    <br>
+                    <br>
+                    <ul class="list" style="border-top: none;">
+                        <li class="list__item">
+                            <textarea class="textarea textarea--transparent" style="width:100%;height:200px;margin-top:4px;" placeholder="Inserisci il commento" id='CommentBody'></textarea>
+                        </li>
+                    </ul>
+                    <br>
+                    <ons-button class="login-button button button--outline" ng-click='Comment()'>Commenta</ons-button>
+                </div>
+            </div>
+
+            </p>
+            <br>
+
+        </ons-page>
+    </ons-template>
+</body>
+
+</html>
